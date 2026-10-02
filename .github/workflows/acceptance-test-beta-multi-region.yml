@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * *'
+permissions:
+  contents: read
 jobs:
   # ensure the code builds...
   build:
@@ -41,7 +43,6 @@ jobs:
       TESTACC_BETA: true
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_LICENSE_ID', matrix.region)] }}
@@ -65,6 +66,8 @@ jobs:
           go mod download
 
       - name: Sweep to prepare
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
         run: |
           make sweep BETA=true
 
@@ -87,14 +90,10 @@ jobs:
       TESTACC_BETA: true
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_LICENSE_ID', matrix.region)] }}
       PINGONE_ORGANIZATION_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_ORG_ID', matrix.region)] }}
-      # Two vars needed for application data source acceptance tests - can be removed when CDI-631 is done
-      PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
-      PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
       # Set skips
       PINGONE_TWILIO_TEST_SKIP: true
       PINGONE_SYNIVERSE_TEST_SKIP: true
@@ -125,6 +124,11 @@ jobs:
 
       - name: TF acceptance tests
         timeout-minutes: 45
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
+          # Two vars needed for application data source acceptance tests - can be removed when CDI-631 is done
+          PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
+          PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
         run: |
           make testacc BETA=true
 
@@ -142,7 +146,6 @@ jobs:
       TESTACC_BETA: true
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_FF_LICENSE_ID', matrix.region)] }}
@@ -166,6 +169,8 @@ jobs:
           go mod download
 
       - name: Sweep to cleanup
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_FF_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
         run: |
           make sweep BETA=true
 
@@ -175,8 +180,10 @@ jobs:
     name: Send failure webhook
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          curl --silent --request POST "${{ secrets.FAILURE_WEBHOOK_URL }}" \
+      - env:
+          FAILURE_WEBHOOK_URL: ${{ secrets.FAILURE_WEBHOOK_URL }}
+        run: |
+          curl --silent --request POST "${FAILURE_WEBHOOK_URL}" \
           --header 'Accept: application/json' \
           --header 'Content-Type: text/plain' \
           --data-raw '{
