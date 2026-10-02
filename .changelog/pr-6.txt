@@ -1,0 +1,3 @@
+```release-note:note
+Hardened the release workflow: the GPG signing key is now imported with an inline gpg script (no third-party action), the job uses least-privilege `contents: write` permissions and a `release` environment, and the Go cache is disabled for release builds.
+```
