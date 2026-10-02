@@ -9,6 +9,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
 jobs:
   # ensure the code builds...
   build:
@@ -46,7 +50,6 @@ jobs:
     env:
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_LICENSE_ID', matrix.region)] }}
@@ -70,6 +73,8 @@ jobs:
           go mod download
 
       - name: Sweep to prepare
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
         run: |
           make sweep
 
@@ -91,27 +96,11 @@ jobs:
     env:
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_LICENSE_ID', matrix.region)] }}
       PINGONE_ORGANIZATION_ID: ${{ vars[format('PINGONE_PROD_{0}_ORG_ID', matrix.region)] }}
       PINGONE_ORGANIZATION_NAME: ${{ vars[format('PINGONE_PROD_{0}_ORG_NAME', matrix.region)] }}
-      PINGONE_KEY_PKCS12_UNENCRYPTED: ${{ secrets.PINGONE_KEY_PKCS12_UNENCRYPTED }}
-      PINGONE_KEY_PKCS12: ${{ secrets.PINGONE_KEY_PKCS12 }}
-      PINGONE_KEY_PKCS12_PASSWORD:  ${{ secrets.PINGONE_KEY_PKCS12_PASSWORD }}
-      PINGONE_KEY_PKCS10_CSR: ${{ secrets.PINGONE_KEY_PKCS10_CSR }}
-      PINGONE_KEY_PEM_CSR: ${{ secrets.PINGONE_KEY_PEM_CSR }}
-      PINGONE_KEY_PEM_CSR_RESPONSE: ${{ secrets.PINGONE_KEY_PEM_CSR_RESPONSE }}
-      PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
-      PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
-      PINGONE_DOMAIN_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_CERTIFICATE_PEM }}
-      PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM }}
-      PINGONE_DOMAIN_KEY_PEM: ${{ secrets.PINGONE_DOMAIN_KEY_PEM }}
-      PINGONE_VERIFIED_EMAIL_DOMAIN: ${{ secrets.PINGONE_VERIFIED_EMAIL_DOMAIN }}
-      PINGONE_GOOGLE_JSON_KEY: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
-      PINGONE_GOOGLE_FIREBASE_CREDENTIALS: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
-      PINGONE_KEY_PKCS8: ${{ secrets.PINGONE_KEY_PKCS8 }}
       # Set skips
       PINGONE_TWILIO_TEST_SKIP: true
       PINGONE_SYNIVERSE_TEST_SKIP: true
@@ -143,6 +132,23 @@ jobs:
 
       - name: TF acceptance tests
         timeout-minutes: 180
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
+          PINGONE_KEY_PKCS12_UNENCRYPTED: ${{ secrets.PINGONE_KEY_PKCS12_UNENCRYPTED }}
+          PINGONE_KEY_PKCS12: ${{ secrets.PINGONE_KEY_PKCS12 }}
+          PINGONE_KEY_PKCS12_PASSWORD:  ${{ secrets.PINGONE_KEY_PKCS12_PASSWORD }}
+          PINGONE_KEY_PKCS10_CSR: ${{ secrets.PINGONE_KEY_PKCS10_CSR }}
+          PINGONE_KEY_PEM_CSR: ${{ secrets.PINGONE_KEY_PEM_CSR }}
+          PINGONE_KEY_PEM_CSR_RESPONSE: ${{ secrets.PINGONE_KEY_PEM_CSR_RESPONSE }}
+          PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
+          PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
+          PINGONE_DOMAIN_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_CERTIFICATE_PEM }}
+          PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM }}
+          PINGONE_DOMAIN_KEY_PEM: ${{ secrets.PINGONE_DOMAIN_KEY_PEM }}
+          PINGONE_VERIFIED_EMAIL_DOMAIN: ${{ secrets.PINGONE_VERIFIED_EMAIL_DOMAIN }}
+          PINGONE_GOOGLE_JSON_KEY: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
+          PINGONE_GOOGLE_FIREBASE_CREDENTIALS: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
+          PINGONE_KEY_PKCS8: ${{ secrets.PINGONE_KEY_PKCS8 }}
         run: |
           make testacc
 
@@ -166,27 +172,11 @@ jobs:
       TESTACC_FLAKY: true
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_LICENSE_ID', matrix.region)] }}
       PINGONE_ORGANIZATION_ID: ${{ vars[format('PINGONE_PROD_{0}_ORG_ID', matrix.region)] }}
       PINGONE_ORGANIZATION_NAME: ${{ vars[format('PINGONE_PROD_{0}_ORG_NAME', matrix.region)] }}
-      PINGONE_KEY_PKCS12_UNENCRYPTED: ${{ secrets.PINGONE_KEY_PKCS12_UNENCRYPTED }}
-      PINGONE_KEY_PKCS12: ${{ secrets.PINGONE_KEY_PKCS12 }}
-      PINGONE_KEY_PKCS12_PASSWORD:  ${{ secrets.PINGONE_KEY_PKCS12_PASSWORD }}
-      PINGONE_KEY_PKCS10_CSR: ${{ secrets.PINGONE_KEY_PKCS10_CSR }}
-      PINGONE_KEY_PEM_CSR: ${{ secrets.PINGONE_KEY_PEM_CSR }}
-      PINGONE_KEY_PEM_CSR_RESPONSE: ${{ secrets.PINGONE_KEY_PEM_CSR_RESPONSE }}
-      PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
-      PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
-      PINGONE_DOMAIN_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_CERTIFICATE_PEM }}
-      PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM }}
-      PINGONE_DOMAIN_KEY_PEM: ${{ secrets.PINGONE_DOMAIN_KEY_PEM }}
-      PINGONE_VERIFIED_EMAIL_DOMAIN: ${{ secrets.PINGONE_VERIFIED_EMAIL_DOMAIN }}
-      PINGONE_GOOGLE_JSON_KEY: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
-      PINGONE_GOOGLE_FIREBASE_CREDENTIALS: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
-      PINGONE_KEY_PKCS8: ${{ secrets.PINGONE_KEY_PKCS8 }}
       PINGONE_TWILIO_TEST_SKIP: true
       PINGONE_SYNIVERSE_TEST_SKIP: true
 
@@ -216,6 +206,23 @@ jobs:
         id: tf-flaky-acc-test
         continue-on-error: true
         timeout-minutes: 180
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
+          PINGONE_KEY_PKCS12_UNENCRYPTED: ${{ secrets.PINGONE_KEY_PKCS12_UNENCRYPTED }}
+          PINGONE_KEY_PKCS12: ${{ secrets.PINGONE_KEY_PKCS12 }}
+          PINGONE_KEY_PKCS12_PASSWORD:  ${{ secrets.PINGONE_KEY_PKCS12_PASSWORD }}
+          PINGONE_KEY_PKCS10_CSR: ${{ secrets.PINGONE_KEY_PKCS10_CSR }}
+          PINGONE_KEY_PEM_CSR: ${{ secrets.PINGONE_KEY_PEM_CSR }}
+          PINGONE_KEY_PEM_CSR_RESPONSE: ${{ secrets.PINGONE_KEY_PEM_CSR_RESPONSE }}
+          PINGONE_KEY_PKCS7_CERT: ${{ secrets.PINGONE_KEY_PKCS7_CERT }}
+          PINGONE_KEY_PEM_CERT: ${{ secrets.PINGONE_KEY_PEM_CERT }}
+          PINGONE_DOMAIN_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_CERTIFICATE_PEM }}
+          PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM: ${{ secrets.PINGONE_DOMAIN_INTERMEDIATE_CERTIFICATE_PEM }}
+          PINGONE_DOMAIN_KEY_PEM: ${{ secrets.PINGONE_DOMAIN_KEY_PEM }}
+          PINGONE_VERIFIED_EMAIL_DOMAIN: ${{ secrets.PINGONE_VERIFIED_EMAIL_DOMAIN }}
+          PINGONE_GOOGLE_JSON_KEY: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
+          PINGONE_GOOGLE_FIREBASE_CREDENTIALS: ${{ secrets.PINGONE_GOOGLE_JSON_KEY }}
+          PINGONE_KEY_PKCS8: ${{ secrets.PINGONE_KEY_PKCS8 }}
         run: |
           make testacc
 
@@ -312,7 +319,6 @@ jobs:
     env:
       PINGONE_TESTING_PROVIDER_VERSION: test
       PINGONE_CLIENT_ID: ${{ vars[format('PINGONE_PROD_{0}_CLIENT_ID_CLIENT_SECRET_BASIC', matrix.region)] }}
-      PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
       PINGONE_ENVIRONMENT_ID: ${{ vars[format('PINGONE_PROD_{0}_ENVIRONMENT_ID', matrix.region)] }}
       PINGONE_REGION_CODE: ${{ matrix.region }}
       PINGONE_LICENSE_ID: ${{ vars[format('PINGONE_PROD_{0}_LICENSE_ID', matrix.region)] }}
@@ -336,6 +342,8 @@ jobs:
           go mod download
 
       - name: Sweep to cleanup
+        env:
+          PINGONE_CLIENT_SECRET: ${{ secrets[format('PINGONE_PROD_{0}_CLIENT_SECRET_CLIENT_SECRET_BASIC', matrix.region)] }}
         run: |
           make sweep
 
