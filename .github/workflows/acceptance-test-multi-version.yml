@@ -263,7 +263,8 @@ jobs:
         run: go install github.com/pingidentity/pingcli@v0.8.4
         continue-on-error: false
 
-      - name: Retrieve access token
+      - name: TF acceptance tests (access token auth)
+        timeout-minutes: 20
         env:
           PINGCLI_PINGONE_CLIENT_CREDENTIALS_CLIENT_ID: ${{ vars.PINGONE_PROD_EU_CLIENT_ID_CLIENT_SECRET_BASIC }}
           PINGCLI_PINGONE_CLIENT_CREDENTIALS_CLIENT_SECRET: ${{ secrets.PINGONE_PROD_EU_CLIENT_SECRET_CLIENT_SECRET_BASIC }}
@@ -272,6 +273,7 @@ jobs:
           PINGCLI_LOGIN_STORAGE_TYPE: file_system
         run: |
           pingcli login -c
+          unset PINGCLI_PINGONE_CLIENT_CREDENTIALS_CLIENT_ID PINGCLI_PINGONE_CLIENT_CREDENTIALS_CLIENT_SECRET
 
           TOKEN_FILE=$(ls -t "$HOME/.pingcli/credentials"/token-*__pingone_client_credentials_default.json | head -n 1)
           if [ -z "$TOKEN_FILE" ] || [ ! -f "$TOKEN_FILE" ]; then
@@ -280,17 +282,14 @@ jobs:
           fi
 
           ACCESS_TOKEN=$(jq -r '.access_token // empty' "$TOKEN_FILE")
+          rm -f "$TOKEN_FILE"
           if [ -z "$ACCESS_TOKEN" ]; then
             echo "No access_token found in pingcli token file" >&2
             exit 1
           fi
+          echo "::add-mask::$ACCESS_TOKEN"
 
-          echo "PINGONE_API_ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
-
-      - name: TF acceptance tests (access token auth)
-        timeout-minutes: 20
-        run: |
-          TF_ACC=1 go test -v -timeout 300s -run '^TestAccDavinciVariable_AccessTokenAuth_WithEnvironment$' ./internal/service/davinci
+          PINGONE_API_ACCESS_TOKEN="$ACCESS_TOKEN" TF_ACC=1 go test -v -timeout 300s -run '^TestAccDavinciVariable_AccessTokenAuth_WithEnvironment$' ./internal/service/davinci
 
   cleanup:
     name: Acceptance Test
