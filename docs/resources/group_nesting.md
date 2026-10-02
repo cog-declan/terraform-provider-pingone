@@ -51,8 +51,8 @@ resource "pingone_group_nesting" "my_group_nesting" {
 ### Required
 
 - `environment_id` (String) The ID of the environment to manage the group nesting in.  Must be a valid PingOne resource ID.  This field is immutable and will trigger a replace plan if changed.
-- `group_id` (String) The ID of the parent group to assign the nested group to.  Must be a valid PingOne resource ID.  This field is immutable and will trigger a replace plan if changed.
-- `nested_group_id` (String) The ID of the group to configure as a nested group.  Must be a valid PingOne resource ID.  This field is immutable and will trigger a replace plan if changed.
+- `group_id` (String) The ID of the parent group to assign the nested group to.  Members of the nested group (`nested_group_id`) become indirect members of this group, and inherit this group's permissions and application access.  Must be a valid PingOne resource ID.  This field is immutable and will trigger a replace plan if changed.
+- `nested_group_id` (String) The ID of the group to configure as a nested group of the parent group (`group_id`).  Members of this group do not gain the permissions or application access of the parent group's members.  Must be a valid PingOne resource ID.  This field is immutable and will trigger a replace plan if changed.
 
 ### Read-Only
 
@@ -64,5 +64,5 @@ resource "pingone_group_nesting" "my_group_nesting" {
 Import is supported using the following syntax, where attributes in `<>` brackets are replaced with the relevant ID.  For example, `<environment_id>` should be replaced with the ID of the environment to import from.
 
 ```shell
-terraform import pingone_group_nesting.example <environment_id>/<group_id>/<group_nesting_id>
+terraform import pingone_group_nesting.example <environment_id>/<group_id>/<nested_group_id>
 ```

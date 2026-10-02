@@ -31,7 +31,7 @@ func TestAccGroupNesting_RemovalDrift(t *testing.T) {
 
 	licenseID := os.Getenv("PINGONE_LICENSE_ID")
 
-	var groupNestingID, groupID, environmentID string
+	var nestedGroupID, groupID, environmentID string
 
 	var p1Client *client.Client
 	var ctx = context.Background()
@@ -51,11 +51,11 @@ func TestAccGroupNesting_RemovalDrift(t *testing.T) {
 			// Test removal of the resource
 			{
 				Config: testAccGroupNestingConfig_Full(resourceName, name),
-				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &groupNestingID),
+				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &nestedGroupID),
 			},
 			{
 				PreConfig: func() {
-					sso.GroupNesting_RemovalDrift_PreConfig(ctx, p1Client.API.ManagementAPIClient, t, environmentID, groupID, groupNestingID)
+					sso.GroupNesting_RemovalDrift_PreConfig(ctx, p1Client.API.ManagementAPIClient, t, environmentID, groupID, nestedGroupID)
 				},
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
@@ -63,7 +63,7 @@ func TestAccGroupNesting_RemovalDrift(t *testing.T) {
 			// Test removal of the group
 			{
 				Config: testAccGroupNestingConfig_Full(resourceName, name),
-				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &groupNestingID),
+				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &nestedGroupID),
 			},
 			{
 				PreConfig: func() {
@@ -75,7 +75,7 @@ func TestAccGroupNesting_RemovalDrift(t *testing.T) {
 			// Test removal of the environment
 			{
 				Config: testAccGroupNestingConfig_NewEnv(environmentName, licenseID, resourceName, name),
-				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &groupNestingID),
+				Check:  sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &nestedGroupID),
 			},
 			{
 				PreConfig: func() {
@@ -113,7 +113,9 @@ func TestAccGroupNesting_Full(t *testing.T) {
 					resource.TestMatchResourceAttr(resourceFullName, "environment_id", verify.P1ResourceIDRegexpFullString),
 					resource.TestMatchResourceAttr(resourceFullName, "group_id", verify.P1ResourceIDRegexpFullString),
 					resource.TestMatchResourceAttr(resourceFullName, "nested_group_id", verify.P1ResourceIDRegexpFullString),
+					resource.TestCheckResourceAttrPair(resourceFullName, "id", resourceFullName, "group_id"),
 					resource.TestCheckResourceAttr(resourceFullName, "type", "DIRECT"),
+					sso.GroupNesting_CheckDirection(resourceFullName),
 				),
 			},
 			// Test importing the resource
@@ -126,11 +128,67 @@ func TestAccGroupNesting_Full(t *testing.T) {
 							return "", fmt.Errorf("resource not found: %s", resourceFullName)
 						}
 
-						return fmt.Sprintf("%s/%s/%s", rs.Primary.Attributes["environment_id"], rs.Primary.Attributes["group_id"], rs.Primary.ID), nil
+						return fmt.Sprintf("%s/%s/%s", rs.Primary.Attributes["environment_id"], rs.Primary.Attributes["group_id"], rs.Primary.Attributes["nested_group_id"]), nil
 					}
 				}(),
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccGroupNesting_InvertedDirectionDrift(t *testing.T) {
+	t.Parallel()
+
+	resourceName := acctest.ResourceNameGen()
+	resourceFullName := fmt.Sprintf("pingone_group_nesting.%s", resourceName)
+
+	name := resourceName
+
+	var nestedGroupID, groupID, environmentID string
+
+	var p1Client *client.Client
+	var ctx = context.Background()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheckNoTestAccFlaky(t)
+			acctest.PreCheckClient(t)
+			acctest.PreCheckNoBeta(t)
+			p1Client = acctestlegacysdk.PreCheckTestClient(ctx, t)
+		},
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		CheckDestroy:             sso.GroupNesting_CheckDestroy,
+		ErrorCheck:               acctest.ErrorCheck(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccGroupNestingConfig_Full(resourceName, name),
+				Check: resource.ComposeTestCheckFunc(
+					sso.GroupNesting_GetIDs(resourceFullName, &environmentID, &groupID, &nestedGroupID),
+					sso.GroupNesting_CheckDirection(resourceFullName),
+				),
+			},
+			// Replace the nesting with the inverse direction outside of Terraform
+			{
+				PreConfig: func() {
+					sso.GroupNesting_Invert_PreConfig(ctx, p1Client.API.ManagementAPIClient, t, environmentID, groupID, nestedGroupID)
+				},
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPtr(resourceFullName, "group_id", &nestedGroupID),
+					resource.TestCheckResourceAttrPtr(resourceFullName, "nested_group_id", &groupID),
+				),
+			},
+			// The inverted nesting is replaced with the configured direction
+			{
+				Config: testAccGroupNestingConfig_Full(resourceName, name),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPtr(resourceFullName, "group_id", &groupID),
+					resource.TestCheckResourceAttrPtr(resourceFullName, "nested_group_id", &nestedGroupID),
+					sso.GroupNesting_CheckDirection(resourceFullName),
+				),
 			},
 		},
 	})

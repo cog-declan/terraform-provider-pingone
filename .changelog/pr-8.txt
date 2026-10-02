@@ -1,0 +1,7 @@
+```release-note:breaking-change
+`resource/pingone_group_nesting`: Fixed the group nesting being created in the inverse direction to that documented (`group_id` was nested within `nested_group_id`, so members of `group_id` inherited the access of `nested_group_id`).  Existing group nestings created by earlier provider versions are detected on refresh and will show a replace plan to correct the direction.  Review plans for this resource before applying after upgrade.  The import ID format is unchanged: `<environment_id>/<group_id>/<nested_group_id>`.
+```
+
+```release-note:security
+`resource/pingone_group_nesting`: Members of the configured parent group (`group_id`) were unintentionally granted the group-based permissions and application access of the configured nested group (`nested_group_id`).
+```

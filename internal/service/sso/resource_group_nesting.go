@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/patrickcping/pingone-go-sdk-v2/management"
+	"github.com/patrickcping/pingone-go-sdk-v2/pingone/model"
 	"github.com/pingidentity/terraform-provider-pingone/internal/framework"
 	"github.com/pingidentity/terraform-provider-pingone/internal/framework/customtypes/pingonetypes"
 	"github.com/pingidentity/terraform-provider-pingone/internal/framework/legacysdk"
@@ -65,11 +66,11 @@ func (r *GroupNestingResource) Schema(ctx context.Context, req resource.SchemaRe
 			),
 
 			"group_id": framework.Attr_LinkID(
-				framework.SchemaAttributeDescriptionFromMarkdown("The ID of the parent group to assign the nested group to."),
+				framework.SchemaAttributeDescriptionFromMarkdown("The ID of the parent group to assign the nested group to.  Members of the nested group (`nested_group_id`) become indirect members of this group, and inherit this group's permissions and application access."),
 			),
 
 			"nested_group_id": framework.Attr_LinkID(
-				framework.SchemaAttributeDescriptionFromMarkdown("The ID of the group to configure as a nested group."),
+				framework.SchemaAttributeDescriptionFromMarkdown("The ID of the group to configure as a nested group of the parent group (`group_id`).  Members of this group do not gain the permissions or application access of the parent group's members."),
 			),
 
 			"type": schema.StringAttribute{
@@ -131,7 +132,7 @@ func (r *GroupNestingResource) Create(ctx context.Context, req resource.CreateRe
 		ctx,
 
 		func() (any, *http.Response, error) {
-			fO, fR, fErr := r.Client.ManagementAPIClient.GroupsApi.CreateGroupNesting(ctx, plan.EnvironmentId.ValueString(), plan.GroupId.ValueString()).GroupNesting(*group).Execute()
+			fO, fR, fErr := r.Client.ManagementAPIClient.GroupsApi.CreateGroupNesting(ctx, plan.EnvironmentId.ValueString(), plan.NestedGroupId.ValueString()).GroupNesting(*group).Execute()
 			return legacysdk.CheckEnvironmentExistsOnPermissionsError(ctx, r.Client.ManagementAPIClient, plan.EnvironmentId.ValueString(), fO, fR, fErr)
 		},
 		"CreateGroupNesting",
@@ -168,25 +169,34 @@ func (r *GroupNestingResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Run the API call
-	var response *management.GroupNesting
-	resp.Diagnostics.Append(legacysdk.ParseResponse(
-		ctx,
-
-		func() (any, *http.Response, error) {
-			fO, fR, fErr := r.Client.ManagementAPIClient.GroupsApi.ReadOneGroupNesting(ctx, data.EnvironmentId.ValueString(), data.GroupId.ValueString(), data.Id.ValueString()).Execute()
-			return legacysdk.CheckEnvironmentExistsOnPermissionsError(ctx, r.Client.ManagementAPIClient, data.EnvironmentId.ValueString(), fO, fR, fErr)
-		},
-		"ReadOneGroupNesting",
-		legacysdk.CustomErrorResourceNotFoundWarning,
-		sdk.DefaultCreateReadRetryable,
-		&response,
-	)...)
+	response, d := r.readGroupNesting(ctx, data.EnvironmentId.ValueString(), data.NestedGroupId.ValueString(), data.GroupId.ValueString())
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// If not found, check whether the nesting exists in the inverse direction (for example, created by an earlier provider version
+	// that sent the group IDs to the API inverted).  The actual direction is stored in state so that Terraform plans to replace it.
+	if response == nil {
+		response, d = r.readGroupNesting(ctx, data.EnvironmentId.ValueString(), data.GroupId.ValueString(), data.NestedGroupId.ValueString())
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		if response != nil {
+			resp.Diagnostics.AddWarning(
+				"Inverted group nesting detected",
+				fmt.Sprintf("The group \"%[1]s\" is nested within the group \"%[2]s\", which is the inverse of the configured relationship (\"%[2]s\" nested within \"%[1]s\").  Members of group \"%[1]s\" are indirect members of group \"%[2]s\" and inherit its access.  The group nesting will be replaced to match the configured direction.", data.GroupId.ValueString(), data.NestedGroupId.ValueString()),
+			)
+
+			data.GroupId, data.NestedGroupId = data.NestedGroupId, data.GroupId
+		}
+	}
+
 	// Remove from state if resource is not found
 	if response == nil {
+		resp.Diagnostics.AddWarning("Requested resource not found", "The requested resource configuration cannot be found in the PingOne service.  If the requested resource is managed in Terraform's state, it may have been removed outside of Terraform.")
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -220,7 +230,7 @@ func (r *GroupNestingResource) Delete(ctx context.Context, req resource.DeleteRe
 		ctx,
 
 		func() (any, *http.Response, error) {
-			fR, fErr := r.Client.ManagementAPIClient.GroupsApi.DeleteGroupNesting(ctx, data.EnvironmentId.ValueString(), data.GroupId.ValueString(), data.Id.ValueString()).Execute()
+			fR, fErr := r.Client.ManagementAPIClient.GroupsApi.DeleteGroupNesting(ctx, data.EnvironmentId.ValueString(), data.NestedGroupId.ValueString(), data.GroupId.ValueString()).Execute()
 			return legacysdk.CheckEnvironmentExistsOnPermissionsError(ctx, r.Client.ManagementAPIClient, data.EnvironmentId.ValueString(), nil, fR, fErr)
 		},
 		"DeleteGroupNesting",
@@ -246,9 +256,8 @@ func (r *GroupNestingResource) ImportState(ctx context.Context, req resource.Imp
 			Regexp: verify.P1ResourceIDRegexp,
 		},
 		{
-			Label:     "group_nesting_id",
-			Regexp:    verify.P1ResourceIDRegexp,
-			PrimaryID: true,
+			Label:  "nested_group_id",
+			Regexp: verify.P1ResourceIDRegexp,
 		},
 	}
 
@@ -262,19 +271,40 @@ func (r *GroupNestingResource) ImportState(ctx context.Context, req resource.Imp
 	}
 
 	for _, idComponent := range idComponents {
-		pathKey := idComponent.Label
-
-		if idComponent.PrimaryID {
-			pathKey = "id"
-		}
-
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(pathKey), attributes[idComponent.Label])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(idComponent.Label), attributes[idComponent.Label])...)
 	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), attributes["group_id"])...)
+}
+
+// readGroupNesting reads the nesting of nestedGroupID within groupID, returning a nil object if it is not found.
+func (r *GroupNestingResource) readGroupNesting(ctx context.Context, environmentID, nestedGroupID, groupID string) (*management.GroupNesting, diag.Diagnostics) {
+	var response *management.GroupNesting
+	diags := legacysdk.ParseResponse(
+		ctx,
+
+		func() (any, *http.Response, error) {
+			fO, fR, fErr := r.Client.ManagementAPIClient.GroupsApi.ReadOneGroupNesting(ctx, environmentID, nestedGroupID, groupID).Execute()
+			return legacysdk.CheckEnvironmentExistsOnPermissionsError(ctx, r.Client.ManagementAPIClient, environmentID, fO, fR, fErr)
+		},
+		"ReadOneGroupNesting",
+		func(r *http.Response, p1Error *model.P1Error) diag.Diagnostics {
+			if (p1Error != nil && p1Error.GetCode() == "NOT_FOUND") || (r != nil && r.StatusCode == http.StatusNotFound) {
+				return diag.Diagnostics{}
+			}
+
+			return nil
+		},
+		sdk.DefaultCreateReadRetryable,
+		&response,
+	)
+
+	return response, diags
 }
 
 func (p *GroupNestingResourceModel) expand() *management.GroupNesting {
 
-	data := management.NewGroupNesting(p.NestedGroupId.ValueString())
+	data := management.NewGroupNesting(p.GroupId.ValueString())
 
 	return data
 }
@@ -293,7 +323,7 @@ func (p *GroupNestingResourceModel) toState(apiObject *management.GroupNesting) 
 
 	p.Id = framework.PingOneResourceIDOkToTF(apiObject.GetIdOk())
 	p.Type = framework.StringOkToTF(apiObject.GetTypeOk())
-	p.NestedGroupId = framework.PingOneResourceIDOkToTF(apiObject.GetIdOk())
+	p.GroupId = framework.PingOneResourceIDOkToTF(apiObject.GetIdOk())
 
 	return diags
 }
