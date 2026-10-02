@@ -1,10 +1,13 @@
 # This GitHub action can publish assets for release when a tag is created.
 # Currently its setup to run on any tag that matches the pattern "v*" (ie. v0.1.0).
 #
-# This uses an action (hashicorp/ghaction-import-gpg) that assumes you set your 
-# private key in the `GPG_PRIVATE_KEY` secret and passphrase in the `PASSPHRASE`
-# secret. If you would rather own your own GPG handling, please fork this action
-# or use an alternative one for key handling.
+# The GPG key is imported with an inline gpg script (no third-party action ever
+# handles the raw key). It expects the armored (or base64-encoded armored) private
+# key in the `GPG_PRIVATE_KEY` secret and its passphrase in the `PASSPHRASE` secret.
+# Scope both secrets to the `release` environment and protect that environment
+# (required reviewers and/or a `v*` tag deployment rule).
+#
+# Actions should be pinned to full commit SHAs and goreleaser to an exact version.
 #
 # You will need to pass the `--batch` flag to `gpg` in your signing step 
 # in `goreleaser` to indicate this is being used in a non-interactive mode.
@@ -14,34 +17,60 @@ on:
   push:
     tags:
       - 'v*'
+permissions:
+  contents: read
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v7
-      -
-        name: Unshallow
-        run: git fetch --prune --unshallow
+        uses: actions/checkout@v7 # TODO(pin): replace with full commit SHA
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       -
         name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7 # TODO(pin): replace with full commit SHA
         with:
           go-version-file: 'go.mod'
-          cache: true
+          cache: false
       -
         name: Import GPG key
         id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v7
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.PASSPHRASE }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="${GNUPGHOME:-$HOME/.gnupg}"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          echo "allow-preset-passphrase" >> "$GNUPGHOME/gpg-agent.conf"
+          gpgconf --kill gpg-agent
+          if printf '%s' "$GPG_PRIVATE_KEY" | grep -q -- '-----BEGIN PGP PRIVATE KEY BLOCK-----'; then
+            printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+          else
+            printf '%s' "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --yes --import
+          fi
+          fingerprint="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          if [ -z "$fingerprint" ]; then
+            echo "::error::No secret key imported from GPG_PRIVATE_KEY"
+            exit 1
+          fi
+          preset="$(gpgconf --list-dirs libexecdir)/gpg-preset-passphrase"
+          for keygrip in $(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "grp" { print $10 }'); do
+            printf '%s' "$PASSPHRASE" | "$preset" --preset "$keygrip"
+          done
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7.2.3
+        uses: goreleaser/goreleaser-action@v7.2.3 # TODO(pin): replace with full commit SHA
         with:
-          version: "~> v2"
+          version: "~> v2" # TODO(pin): replace with exact v2.x.y
           args: release --clean
           distribution: goreleaser
         env:
