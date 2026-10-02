@@ -57,7 +57,8 @@ func (r *WebhookResource) UpgradeState(ctx context.Context) map[int64]resource.S
 					},
 
 					"http_endpoint_headers": schema.MapAttribute{
-						Optional: true,
+						Optional:  true,
+						Sensitive: true,
 
 						ElementType: types.StringType,
 					},
