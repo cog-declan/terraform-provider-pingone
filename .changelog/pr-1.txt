@@ -1,0 +1,3 @@
+```release-note:bug
+`resource/pingone_webhook`: Fixed the `http_endpoint_headers` and `connection_details_headers` attributes not being marked as sensitive, which caused header values (such as `Authorization` credentials) to be shown in plain text in plan and apply output.
+```
