@@ -1,0 +1,7 @@
+```release-note:breaking-change
+`data-source/pingone_davinci_application`: The `api_key.value` and `oauth.client_secret` attributes are now marked as sensitive. Any `output` that references these values must now set `sensitive = true`.
+```
+
+```release-note:breaking-change
+`data-source/pingone_davinci_applications`: The `davinci_applications.api_key.value` and `davinci_applications.oauth.client_secret` attributes are now marked as sensitive. Any `output` that references these values must now set `sensitive = true`.
+```
